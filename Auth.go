@@ -1,9 +1,15 @@
 package auth
 
 import (
+	"encoding/base64"
 	"errors"
+	"log"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/dgrijalva/jwt-go"
 )
 
@@ -20,7 +26,7 @@ type customPayload struct {
 	jwt.StandardClaims
 }
 
-var mySigningKey = []byte("e4Mc8nxQU185ZAVJHxYp5BdsXqrTTbsFShPsCKj481JBbwSf8EqzvDi9Gso1lonnzb45T0Va2IIkBWR0UeMNzpRmRn120KgBV4DYtV7rPOXmeavhFw2X5Xl8KmJjgmwAREqsqn6pPPnhZP2Ye3c44x2lyoh3jYzKO3DT8hxvgVbrFlro0hstV1vxNqfuVR7iq7JCvihQqXjQzOPY7R4P90NtEd9WUg5M2PueNALkqWZG6BBNvmkVS1a7P6esI8Bq")
+// var mySigningKey = []byte(getSecret())
 
 func Validate(tokenString string) (rrssUser, error) {
 	if len(tokenString) < 1 {
@@ -31,7 +37,7 @@ func Validate(tokenString string) (rrssUser, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return rrssUser{}, errors.New("Unexpected signing method")
 		}
-		return mySigningKey, nil
+		return []byte(getSecret()), nil
 	})
 
 	user := rrssUser{}
@@ -56,5 +62,66 @@ func Mint(email string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	return token.SignedString(mySigningKey)
+	return token.SignedString([]byte(getSecret()))
+}
+
+func getSecret() string {
+	secretName := "dev/rrss/signingKey"
+	region := "eu-central-1"
+
+	//Create a Secrets Manager client
+	svc := secretsmanager.New(session.New(),
+		aws.NewConfig().WithRegion(region))
+	input := &secretsmanager.GetSecretValueInput{
+		SecretId:     aws.String(secretName),
+		VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
+	}
+
+	// In this sample we only handle the specific exceptions for the 'GetSecretValue' API.
+	// See https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
+
+	result, err := svc.GetSecretValue(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case secretsmanager.ErrCodeDecryptionFailure:
+				// Secrets Manager can't decrypt the protected secret text using the provided KMS key.
+				log.Println(secretsmanager.ErrCodeDecryptionFailure, aerr.Error())
+
+			case secretsmanager.ErrCodeInternalServiceError:
+				// An error occurred on the server side.
+				log.Println(secretsmanager.ErrCodeInternalServiceError, aerr.Error())
+
+			case secretsmanager.ErrCodeInvalidParameterException:
+				// You provided an invalid value for a parameter.
+				log.Println(secretsmanager.ErrCodeInvalidParameterException, aerr.Error())
+
+			case secretsmanager.ErrCodeInvalidRequestException:
+				// You provided a parameter value that is not valid for the current state of the resource.
+				log.Println(secretsmanager.ErrCodeInvalidRequestException, aerr.Error())
+
+			case secretsmanager.ErrCodeResourceNotFoundException:
+				// We can't find the resource that you asked for.
+				log.Println(secretsmanager.ErrCodeResourceNotFoundException, aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			log.Println(err.Error())
+		}
+	}
+
+	var secretString, decodedBinarySecret string
+	if result.SecretString != nil {
+		secretString = *result.SecretString
+		return secretString
+	} else {
+		decodedBinarySecretBytes := make([]byte, base64.StdEncoding.DecodedLen(len(result.SecretBinary)))
+		len, err := base64.StdEncoding.Decode(decodedBinarySecretBytes, result.SecretBinary)
+		if err != nil {
+			log.Println("Base64 Decode Error:", err)
+		}
+		decodedBinarySecret = string(decodedBinarySecretBytes[:len])
+		return decodedBinarySecret
+	}
 }
