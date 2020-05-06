@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"log"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -36,6 +37,26 @@ var sess = session.Must(session.NewSessionWithOptions(
 	session.Options{SharedConfigState: session.SharedConfigEnable},
 ))
 var svc = dynamodb.New(sess)
+
+func ValidateJwt(tokenString string) (RrssUser, error) {
+	token, _ := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			log.Fatalf("Unexpected signing method: %v", token.Header["alg"])
+			return RrssUser{}, errors.New("Unexpected signing method")
+		}
+		return mySigningKey, nil
+	})
+
+	user := RrssUser{}
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		user.Email = claims["sub"].(string)
+	} else {
+		log.Printf("Unexpected signing method: %v", token.Header["alg"])
+		return user, errors.New("Unexpected signing method")
+	}
+
+	return user, nil
+}
 
 func MintJwt(email string, password string) (string, error) {
 	userResult, err := getUser(email)
