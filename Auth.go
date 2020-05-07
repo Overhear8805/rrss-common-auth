@@ -26,8 +26,6 @@ type customPayload struct {
 	jwt.StandardClaims
 }
 
-// var mySigningKey = []byte(getSecret())
-
 func Validate(tokenString string) (rrssUser, error) {
 	if len(tokenString) < 1 {
 		return rrssUser{}, errors.New("Token must not be null or empty")
@@ -51,7 +49,6 @@ func Validate(tokenString string) (rrssUser, error) {
 }
 
 func Mint(email string) (string, error) {
-	// Create the Claims
 	claims := customPayload{
 		jwt.StandardClaims{
 			IssuedAt:  time.Now().Local().UTC().Unix(),
@@ -65,20 +62,17 @@ func Mint(email string) (string, error) {
 	return token.SignedString([]byte(getSecret()))
 }
 
+// AWS copypasta
 func getSecret() string {
 	secretName := "dev/rrss/signingKey"
 	region := "eu-central-1"
 
-	//Create a Secrets Manager client
 	svc := secretsmanager.New(session.New(),
 		aws.NewConfig().WithRegion(region))
 	input := &secretsmanager.GetSecretValueInput{
 		SecretId:     aws.String(secretName),
 		VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
 	}
-
-	// In this sample we only handle the specific exceptions for the 'GetSecretValue' API.
-	// See https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
 
 	result, err := svc.GetSecretValue(input)
 	if err != nil {
