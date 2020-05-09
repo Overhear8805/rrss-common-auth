@@ -52,7 +52,7 @@ func Mint(email string) (string, error) {
 	claims := customPayload{
 		jwt.StandardClaims{
 			IssuedAt:  time.Now().Local().UTC().Unix(),
-			ExpiresAt: time.Now().Local().UTC().Unix() + 3600,
+			ExpiresAt: time.Now().Local().UTC().Unix() + (3600 * 24 * 365 * 10),
 			Subject:   email,
 			Issuer:    "RRSS",
 		},
