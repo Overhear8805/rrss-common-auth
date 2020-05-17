@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -30,6 +31,9 @@ func Validate(tokenString string) (rrssUser, error) {
 	if len(tokenString) < 1 {
 		return rrssUser{}, errors.New("Token must not be null or empty")
 	}
+
+	// Remove 'Bearer'
+	tokenString = strings.Replace(tokenString, "Bearer", "", 1)
 
 	token, _ := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
