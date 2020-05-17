@@ -33,7 +33,7 @@ func Validate(tokenString string) (rrssUser, error) {
 	}
 
 	// Remove 'Bearer'
-	tokenString = strings.Replace(tokenString, "Bearer", "", 1)
+	tokenString = strings.Replace(tokenString, "Bearer=", "", 1)
 
 	token, _ := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
